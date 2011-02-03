@@ -1,0 +1,180 @@
+;; -*- Lisp -*-
+;; file test_fopen.melt
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(comment "***
+    (C) Copyright 2011 Pierre Vittet
+    This test_fopen.melt file is part of GMWarn.
+
+    GMWarn is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3, or (at your option)
+    any later version.
+
+    GMWarn is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with GMWarn; see the file COPYING3.  If not see
+    <http://www.gnu.org/licenses/>.
+***")
+
+
+;;monitor monitor that after each call to fopen, there is a test on the returned value
+
+
+    ;;allow to exec spy_chroot_exec if it hasnt run already
+(defun test_fopen_gate(pass)
+    (debugtree "test_fopen cfundecl" (cfun_decl))
+    pass
+)
+
+;;contains the data of the pass
+(defclass class_test_fopen_data
+  :super class_proped
+  :fields ( 
+        test_fopen_pass
+       )
+)
+
+;;detect fopen by using a match, return the lhs value
+(defun detect_fopen (grdata :gimple g)
+    (match g
+        (
+            ?(gimple_call_2  ?lhs 
+                            ?(and ?callfndcl 
+                            ?(tree_function_decl 
+                            ?(cstring_same "fopen")
+                            ?_))
+                        ?arg1
+                        ?arg2
+             )
+            (progn  
+                (debugtree "the lhs tree" lhs)
+                (return (make_tree discr_tree lhs))
+            )
+        )
+        (
+            ?_((return (make_tree discr_tree (null_tree))))
+        )
+    )
+)
+
+;;detect a gimple cond with the null pointer
+;;the cond can be of type == or !=
+;;it return the lhs part of the cond (or null if no match)
+(defun detect_cond_with_null (grdata :gimple g )
+    (match g
+        (
+              ?(gimple_cond_notequal ?lhs
+                                     ?(and ?rhs
+                                     ?(tree_integer_cst
+                                     0))
+               )(
+                    (return (make_tree discr_tree lhs))
+               )
+          )
+          (
+            ?(gimple_cond_equal ?lhs
+                                   ?(and ?rhs
+                                   ?(tree_integer_cst
+                                   0))
+             )(
+                    (return (make_tree discr_tree lhs))
+             )
+          )
+          (
+            ?_((return (make_tree discr_tree (null_tree))))
+          )
+      )
+)
+
+
+    ;;pass through each gimple and detect if there is an fopen
+    ;;if there is one, it search for a test
+    ;;the var state is used to know if there was an fopen in the precedent gimple
+            ;;state=:true if there was one
+            ;;state= () null in other way
+(defun detect_untested_fopen (grdata)
+    (let ((:tree lhs_fopen (null_tree)) 
+          (state ())
+         )
+        (each_bb_cfun 
+        ()
+        (:basic_block bb :tree fundecl)
+        (eachgimple_in_basicblock 
+            (bb)
+            (:gimple g)
+            (if state;;if previous gimple was an fopen
+                (progn
+                    (if (==t lhs_fopen (tree_content (detect_cond_with_null grdata g)))
+                        ;if
+                        (setq state ())
+                        ;else
+                        (progn 
+                            (warning_at_gimple g "fopen not followed by a test on his returned pointer")
+                            (setq state ())
+                        )
+                    )
+                )
+                ;;else
+                (progn
+                    (setq lhs_fopen (tree_content (detect_fopen grdata g)))
+                    (if lhs_fopen
+                        (setq state :true)
+                    )
+                )
+            )
+        ))
+    )
+)
+
+;; start pass: for each basic bloc, it call detect_untested_fopen
+(defun test_fopen_exec (pass)
+    (debug_msg pass "test_fopen_pass_exec pass at start")
+    (assert_msg "test_fopen_exec check cfun has cfg" (cfun_has_cfg))
+    (debugtree "test_fopen_exec start cfundecl" (cfun_decl))
+    (let ( (grdata (instance class_test_fopen_data
+        :test_fopen_pass pass
+         )))
+        ;; add our grdata associated to the cfun_decl in the pass data,
+        ;; hence the gate will avoid running the pass twice
+        (maptree_put (get_field :gccpass_data pass) (cfun_decl) grdata)
+        ;; it is useless to do a each_cgraph_decl here...
+        (debug_msg grdata "spy_chroot_exec grdata before eachbbcfun")
+        ;; gimple ssa passes have a cfg..
+        (detect_untested_fopen grdata)
+        (debug_msg pass "test_fopen_pass at end")
+    )
+)
+
+
+;;declare the pass
+(defun test_fopen_docmd (cmd moduldata)
+    (let ( (test_fopen
+        (instance class_gcc_gimple_pass
+            :named_name '"melt_test_fopen"
+            :gccpass_gate test_fopen_gate
+            :gccpass_exec test_fopen_exec
+            :gccpass_data (make_maptree discr_map_trees 100)
+            :gccpass_properties_required ()
+          )
+    ))
+
+  ;;try to add it after the SSA pass (try after phiopt if problem)
+  (install_melt_gcc_pass test_fopen "after" "ssa" 0)
+  (debug_msg test_fopen "spy_chroot_mode installed spy_chroot")
+;; return the pass to accept the mode
+  (return test_fopen)
+))
+
+
+(definstance test_fopen
+    class_melt_mode
+    :named_name '"test_fopen"
+    :meltmode_help '"monitor that after each call to fopen, there is a test on the returned value"
+    :meltmode_fun test_fopen_docmd
+)
+
+(install_melt_mode test_fopen)
