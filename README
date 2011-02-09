@@ -1,4 +1,0 @@
-s projet aims to use MELT to create a set of plugin in order to had commonly usefull warning when compiling with GCC.
-
-It contain already:
-    test_fopen.melt which allows to send a warning when a call to fopen is not followed by a test (to be sure that the given pointer is not null).
