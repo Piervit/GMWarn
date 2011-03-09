@@ -20,11 +20,9 @@
     <http://www.gnu.org/licenses/>.
 ***")
 
-
 ;;monitor monitor that after each call to fopen, there is a test on the returned value
 
-
-    ;;allow to exec spy_chroot_exec if it hasnt run already
+    ;;we always enter the test her
 (defun test_fopen_gate(pass)
     (debugtree "test_fopen cfundecl" (cfun_decl))
     pass
@@ -100,9 +98,9 @@
     (let ((:tree lhs_fopen (null_tree)) 
           (state ())
          )
-        (each_bb_cfun 
+        (each_bb_current_fun
         ()
-        (:basic_block bb :tree fundecl)
+        (:basic_block bb)
         (eachgimple_in_basicblock 
             (bb)
             (:gimple g)
@@ -138,11 +136,7 @@
     (let ( (grdata (instance class_test_fopen_data
         :test_fopen_pass pass
          )))
-        ;; add our grdata associated to the cfun_decl in the pass data,
-        ;; hence the gate will avoid running the pass twice
-        (maptree_put (get_field :gccpass_data pass) (cfun_decl) grdata)
-        ;; it is useless to do a each_cgraph_decl here...
-        (debug_msg grdata "spy_chroot_exec grdata before eachbbcfun")
+        (debug_msg grdata "test_fopen_exec grdata before eachbbcfun")
         ;; gimple ssa passes have a cfg..
         (detect_untested_fopen grdata)
         (debug_msg pass "test_fopen_pass at end")
@@ -164,7 +158,7 @@
 
   ;;try to add it after the SSA pass (try after phiopt if problem)
   (install_melt_gcc_pass test_fopen "after" "ssa" 0)
-  (debug_msg test_fopen "spy_chroot_mode installed spy_chroot")
+  (debug_msg test_fopen "test_fopen_mode installed test_fopen")
 ;; return the pass to accept the mode
   (return test_fopen)
 ))
