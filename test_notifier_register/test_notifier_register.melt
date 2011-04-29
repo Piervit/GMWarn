@@ -1,0 +1,180 @@
+;; -*- Lisp -*-
+;; file test_notifier_register.melt
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(comment "***
+    (C) Copyright 2011 Pierre Vittet
+    This test_notifier_register.melt file is part of GMWarn.
+
+    GMWarn is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3, or (at your option)
+    any later version.
+
+    GMWarn is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with GMWarn; see the file COPYING3.  If not see
+    <http://www.gnu.org/licenses/>.
+***")
+
+;;Plugin job: 
+;;Add a control for the kernel notifier API
+;;(http://lxr.linux.no/#linux+v2.6.38/include/linux/notifier.h)
+;;
+;;for each notifier_block, check that it call atomic_notifier_chain_register
+;;only once.
+;;
+;;for the moment, it is quite limited because it doesn't take in account call
+;;to atomic_notifier_chain_unregister.
+
+    ;;enter the pass if it return something other than null
+(defun test_notifier_register_gate(pass)
+    (debugtree "open cfun_decl" (cfun_decl))
+    pass
+)
+
+
+    ;;contains the data of the pass
+(defclass class_test_notifier_register_data
+  :super class_proped
+  :fields ( 
+        test_notifier_register_pass
+       )
+)
+
+(defun detect_chain_register(grdata :gimple g)
+    (match g
+        (
+            ?(gimple_call_2  ?lhs 
+                            ?(and ?callfndcl 
+                            ?(tree_function_decl 
+                            ?(cstring_same "atomic_notifier_chain_register")
+                            ?_))
+                        ?arg1
+                        ?arg2
+             )
+            (progn  
+                (debugtree "the arg2 tree" arg2)
+                (return (make_tree discr_tree arg2))
+            )
+        )
+        (
+            ?_((return (make_tree discr_tree (null_tree))))
+        )
+    )
+)
+
+
+(defun get_pointed_tree (useless :tree treePtr)
+    (debugtree "tree enter ptr" treePtr)
+    (match treePtr 
+        (
+            ?(tree_address_expression ?pointedTree
+                                      ?ref
+            )
+            (progn 
+            (debugtree "the reference" ref)
+            (return (make_tree discr_tree ref))
+            )
+        )
+    )
+)
+
+(defun parse_notifier(grdata)
+    (let((notifierBlockList (make_list discr_list)) 
+         )
+        (each_bb_current_fun
+        ()
+        (:basic_block bb)
+        (eachgimple_in_basicblock 
+            (bb)
+            (:gimple g)
+            (let ((notifier_blockVal (detect_chain_register grdata g)))
+            (if (tree_content notifier_blockVal)
+                ;if
+                (progn
+                     (let ( 
+                           (nfound :true)
+                          )
+
+                        (debug_msg notifierBlockList "the list")
+                        (debug_msg (list_first_element notifierBlockList) "the list first el")
+                        (foreach_in_list
+                            (notifierBlockList)
+                            (curpair curnotifier)
+                            (debug_msg curnotifier "curnotifier")
+
+                            
+                            (debugtree "tree curnotifier" (tree_content curnotifier))
+                            (debugtree "pointed curnotifier" (tree_content (get_pointed_tree () (tree_content curnotifier))))
+                            (if (==t 
+                                (tree_content (get_pointed_tree () (tree_content curnotifier))) 
+                                (tree_content (get_pointed_tree () (tree_content notifier_blockVal)))
+                                )
+                                ;;if
+                                (progn
+                                (debug_msg curnotifier  "treefound")
+                                (warning_at_gimple g "same notifier block registered two times")
+                                (setq nfound :false)
+                                )
+                            )
+                        )
+                        (if nfound
+                            (progn
+                            (debug_msg notifier_blockVal "append el" )
+                            (list_append notifierBlockList notifier_blockVal)
+                            ;;(debug_msg notifierBlockList "the list")
+                            )
+                        )
+                    )
+                )
+            ))
+        ))
+    )
+)
+
+
+    ;; start pass 
+(defun test_notifier_register_exec (pass)
+    (debug_msg pass "test_notifier_register_pass_exec pass at start")
+    (assert_msg "test_notifier_register_exec check cfun has cfg" (cfun_has_cfg))
+    (debugtree "test_notifier_register_exec start cfundecl" (cfun_decl))
+    (let ( (grdata (instance class_test_notifier_register_data
+        :test_notifier_register_pass pass
+         )))
+        (debug_msg grdata "test_notifier_register_exec grdata before eachbbcfun")
+        (parse_notifier grdata)
+        (debug_msg pass "test_notifier_register_pass at end")
+    )
+)
+
+;;declare the pass
+(defun test_notifier_register_docmd (cmd moduldata)
+    (let ( (test_notifier_register
+        (instance class_gcc_gimple_pass
+            :named_name '"melt_test_notifier_register"
+            :gccpass_gate test_notifier_register_gate
+            :gccpass_exec test_notifier_register_exec
+            :gccpass_data (make_maptree discr_map_trees 100)
+            :gccpass_properties_required ()
+          )
+    ))
+
+  ;;try to add it after the SSA pass (try after phiopt if problem)
+  (install_melt_gcc_pass test_notifier_register "after" "ssa" 0)
+  (debug_msg test_notifier_register "test_notifier_register_mode installed test_notifier_register")
+;; return the pass to accept the mode
+  (return test_notifier_register)
+))
+
+(definstance test_notifier_register
+    class_melt_mode
+    :named_name '"test_notifier_register"
+    :meltmode_help '"for each notifier_block, check that it call atomic_notifier_chain_register only once"
+    :meltmode_fun test_notifier_register_docmd
+)
+
+(install_melt_mode test_notifier_register)

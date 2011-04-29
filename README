@@ -4,3 +4,5 @@ In order to test thoses plugins, you will need a working version of GCC MELT bra
 
 It contain already:
     test_fopen.melt which allows to send a warning when a call to fopen is not followed by a test (to be sure that the given pointer is not null).
+
+	test_notifier_register which is more experimental for now (it has to be tested and improved), it checks that we call the function atomic_notifier_chain_register (comes from the kernel notifier API (http://lxr.linux.no/#linux+v2.6.38/include/linux/notifier.h)) only once on the same object in a function. It has to be tested on real programs.
