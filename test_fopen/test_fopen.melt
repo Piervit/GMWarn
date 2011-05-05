@@ -22,9 +22,9 @@
 
 ;;monitor monitor that after each call to fopen, there is a test on the returned value
 
-    ;;we always enter the test her
+
 (defun test_fopen_gate(pass)
-    (debugtree "test_fopen cfundecl" (cfun_decl))
+    (debugtree "test_fopen cfun_decl" (cfun_decl))
     pass
 )
 
@@ -44,6 +44,20 @@
                             ?(and ?callfndcl 
                             ?(tree_function_decl 
                             ?(cstring_same "fopen")
+                            ?_))
+                        ?arg1
+                        ?arg2
+             )
+            (progn  
+                (debugtree "the lhs tree" lhs)
+                (return (make_tree discr_tree lhs))
+            )
+        )
+        (
+            ?(gimple_call_2  ?lhs 
+                            ?(and ?callfndcl 
+                            ?(tree_function_decl 
+                            ?(cstring_same "fopen_unlocked")
                             ?_))
                         ?arg1
                         ?arg2
@@ -130,6 +144,9 @@
 
 ;; start pass: for each basic bloc, it call detect_untested_fopen
 (defun test_fopen_exec (pass)
+    (informsg_plain "testing fopen with melt")
+
+
     (debug_msg pass "test_fopen_pass_exec pass at start")
     (assert_msg "test_fopen_exec check cfun has cfg" (cfun_has_cfg))
     (debugtree "test_fopen_exec start cfundecl" (cfun_decl))
@@ -151,7 +168,7 @@
             :named_name '"melt_test_fopen"
             :gccpass_gate test_fopen_gate
             :gccpass_exec test_fopen_exec
-            :gccpass_data (make_maptree discr_map_trees 100)
+            :gccpass_data (make_maptree discr_map_trees 100000)
             :gccpass_properties_required ()
           )
     ))
