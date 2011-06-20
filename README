@@ -1,3 +1,10 @@
+########### This project is deprecated : I am working on a more advanced one 
+  
+  In GMWarn, the idea was to write several plugins, which could do simple tests (read below), I am writing a new plugin which is more generic: it contains a set of simple tests which can be parameterize by the user by giving arguments. You can learn more about this projet here: https://gitorious.org/talpo
+
+
+##########
+
 this projet aims to use MELT to create a set of plugin in order to had commonly usefull warning when compiling with GCC.
 
 In order to test thoses plugins, you will need a working version of GCC MELT branch (http://gcc.gnu.org/wiki/MiddleEndLispTranslator). You can try with MELT as plugin but you will need some change in the Makefile.
